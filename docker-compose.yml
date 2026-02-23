@@ -1,19 +1,23 @@
 services:
   ollama:
     image: ollama/ollama:latest
+    environment:
+      # Must match ollama_model in config/config.yaml.
+      OLLAMA_MODEL: gemma3:1b
+    entrypoint: ["/bin/bash", "-c", "ollama serve & for i in $$(seq 1 30); do ollama list >/dev/null 2>&1 && break; sleep 1; done && ollama pull $$OLLAMA_MODEL && wait"]
     # Keep model weights on a named volume so pulls survive container restarts.
     volumes:
       - ollama-data:/root/.ollama
     # Internal-only port for other services on the Docker network.
     expose:
       - "11434"
-    # Basic API readiness check used later by dependent services.
+    # Verify that the configured model is actually loaded before dependents start.
     healthcheck:
-      test: ["CMD", "ollama", "list"]
+      test: ["CMD-SHELL", "ollama list | grep -q \"$$OLLAMA_MODEL\""]
       interval: 30s
       timeout: 10s
-      retries: 5
-      start_period: 20s
+      retries: 10
+      start_period: 120s
     restart: unless-stopped
     networks:
       - email-internal
@@ -31,7 +35,7 @@ services:
     volumes:
       - email-data:/data
       - ./config/config.yaml:/config/config.yaml:ro
-      - ./config/token.json:/secrets/token.json:ro
+      - ./config/token.json:/secrets/token.json
       - ./config/credentials.json:/secrets/credentials.json:ro
     healthcheck:
       test: ["CMD-SHELL", "python -c \"from common.db import initialize_database; initialize_database()\""]

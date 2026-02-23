@@ -22,6 +22,7 @@ summarizer_schedule:
   - "0 13 * * *"
   - "0 18 * * *"
 
+# Must match OLLAMA_MODEL env var in docker-compose.yml so the model is auto-pulled.
 ollama_model: "phi3:mini"
 ollama_url: "http://ollama:11434/api/generate"
 ollama_timeout_seconds: 180
