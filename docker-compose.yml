@@ -1,0 +1,99 @@
+services:
+  ollama:
+    image: ollama/ollama:latest
+    # Keep model weights on a named volume so pulls survive container restarts.
+    volumes:
+      - ollama-data:/root/.ollama
+    # Internal-only port for other services on the Docker network.
+    expose:
+      - "11434"
+    # Basic API readiness check used later by dependent services.
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+    networks:
+      - email-internal
+
+  fetcher:
+    build:
+      context: .
+      dockerfile: fetcher/Dockerfile
+    environment:
+      CONFIG_PATH: /config/config.yaml
+      DATABASE_PATH: /data/email_summaries.db
+      GMAIL_TOKEN_PATH: /secrets/token.json
+      GMAIL_CREDENTIALS_PATH: /secrets/credentials.json
+    # Bind-mount config and Gmail OAuth files from host; keep secrets out of images.
+    volumes:
+      - email-data:/data
+      - ./config/config.yaml:/config/config.yaml:ro
+      - ./config/token.json:/secrets/token.json:ro
+      - ./config/credentials.json:/secrets/credentials.json:ro
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"from common.db import initialize_database; initialize_database()\""]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+    networks:
+      - email-internal
+
+  summarizer:
+    build:
+      context: .
+      dockerfile: summarizer/Dockerfile
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      CONFIG_PATH: /config/config.yaml
+      DATABASE_PATH: /data/email_summaries.db
+    # Uses internal-only Ollama URL (http://ollama:11434) on the private Docker network.
+    volumes:
+      - email-data:/data
+      - ./config/config.yaml:/config/config.yaml:ro
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"from common.db import initialize_database; initialize_database()\""]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+    networks:
+      - email-internal
+
+  telegram-bot:
+    build:
+      context: .
+      dockerfile: telegram_bot/Dockerfile
+    depends_on:
+      summarizer:
+        condition: service_started
+    environment:
+      CONFIG_PATH: /config/config.yaml
+      DATABASE_PATH: /data/email_summaries.db
+    volumes:
+      - email-data:/data
+      - ./config/config.yaml:/config/config.yaml:ro
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"from common.db import initialize_database; initialize_database()\""]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+    networks:
+      - email-internal
+
+volumes:
+  ollama-data:
+  email-data:
+
+networks:
+  email-internal:
+    driver: bridge

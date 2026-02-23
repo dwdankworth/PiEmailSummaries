@@ -1,0 +1,59 @@
+vip_senders:
+  - "boss@company.com"
+  - "*@important-client.com"
+
+skip_labels:
+  - "CATEGORY_PROMOTIONS"
+  - "CATEGORY_SOCIAL"
+  - "CATEGORY_UPDATES"
+
+priority_keywords:
+  - "urgent"
+  - "deadline"
+  - "action required"
+
+digest_schedule:
+  - "0 8 * * *"
+  - "0 13 * * *"
+  - "0 18 * * *"
+
+summarizer_schedule:
+  - "0 8 * * *"
+  - "0 13 * * *"
+  - "0 18 * * *"
+
+ollama_model: "phi3:mini"
+ollama_url: "http://ollama:11434/api/generate"
+
+telegram_bot_token: "replace-me"
+telegram_chat_id: "replace-me"
+
+gmail_user_email: "replace-me@gmail.com"
+gmail_max_results: 25
+summarizer_batch_size: 20
+fetch_interval_minutes: 20
+
+prompt_template: |
+  You are an email triage assistant. Analyze the following email and respond with ONLY valid JSON, no other text.
+
+  Context:
+  - VIP sender: {is_vip}
+  - Direct recipient (To/CC): {is_direct}
+  - Thread depth: {thread_depth}
+  - Priority keywords found: {matched_keywords}
+
+  Email:
+  From: {sender}
+  To: {recipients}
+  Subject: {subject}
+  Date: {date}
+  Body:
+  {body_text}
+
+  Respond with this exact JSON structure:
+  {{
+    "summary": "2-3 sentence summary of the email content and any action items",
+    "priority": <integer 1-5, where 5 is most urgent>,
+    "categories": ["list", "of", "relevant", "tags"],
+    "priority_reason": "One sentence explaining why you assigned this priority"
+  }}
