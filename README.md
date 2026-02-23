@@ -53,8 +53,13 @@ cp config/config.example.yaml config/config.yaml
 Required host files (bind-mounted, never baked into images):
 
 - `config/credentials.json` (Google Cloud OAuth client)
-- `config/token.json` (OAuth token for Gmail access)
 - `config/config.yaml` (`telegram_bot_token`, `telegram_chat_id`, filters, schedules)
+
+Generate Gmail token after adding credentials:
+
+```bash
+python scripts/generate_gmail_token.py
+```
 
 ## 3) Initialize DB schema
 

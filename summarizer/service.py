@@ -42,6 +42,12 @@ def _keyword_matches(subject: str, body: str, priority_keywords: list[str]) -> l
 
 def _build_prompt(config: AppConfig, row: dict[str, Any], matched_keywords: list[str]) -> str:
     headers = json.loads(row["headers_json"])
+    body_text = str(row["body_text"])
+    if len(body_text) > config.prompt_body_max_chars:
+        body_text = (
+            body_text[: config.prompt_body_max_chars]
+            + "\n\n[...email body truncated for model context window...]"
+        )
     return config.prompt_template.format(
         is_vip=bool(row["is_vip"]),
         is_direct=_direct_recipient(headers.get("to", ""), config.gmail_user_email),
@@ -51,7 +57,7 @@ def _build_prompt(config: AppConfig, row: dict[str, Any], matched_keywords: list
         recipients=headers.get("to", ""),
         subject=row["subject"],
         date=row["date"],
-        body_text=row["body_text"],
+        body_text=body_text,
     )
 
 
@@ -66,8 +72,9 @@ def _call_ollama(config: AppConfig, prompt: str) -> dict[str, Any]:
                     "prompt": prompt,
                     "stream": False,
                     "format": "json",
+                    "options": {"num_ctx": config.ollama_num_ctx},
                 },
-                timeout=90.0,
+                timeout=float(config.ollama_timeout_seconds),
             )
             response.raise_for_status()
             payload = response.json()

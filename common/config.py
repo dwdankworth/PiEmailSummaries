@@ -61,6 +61,9 @@ class AppConfig:
     gmail_user_email: str = ""
     fetch_interval_minutes: int = 20
     ollama_url: str = "http://ollama:11434/api/generate"
+    ollama_timeout_seconds: int = 180
+    ollama_num_ctx: int = 8192
+    prompt_body_max_chars: int = 6000
 
 
 def _to_list(value: Any, fallback: list[str]) -> list[str]:
@@ -119,7 +122,18 @@ def load_config(config_path: str | None = None) -> AppConfig:
             raw_data.get("fetch_interval_minutes", AppConfig().fetch_interval_minutes)
         ),
         ollama_url=str(raw_data.get("ollama_url", AppConfig().ollama_url)),
+        ollama_timeout_seconds=int(
+            raw_data.get("ollama_timeout_seconds", AppConfig().ollama_timeout_seconds)
+        ),
+        ollama_num_ctx=int(raw_data.get("ollama_num_ctx", AppConfig().ollama_num_ctx)),
+        prompt_body_max_chars=int(
+            raw_data.get("prompt_body_max_chars", AppConfig().prompt_body_max_chars)
+        ),
     )
     if config.gmail_max_results <= 0 or config.summarizer_batch_size <= 0:
         raise ValueError("gmail_max_results and summarizer_batch_size must be > 0")
+    if config.ollama_timeout_seconds <= 0 or config.ollama_num_ctx <= 0 or config.prompt_body_max_chars <= 0:
+        raise ValueError(
+            "ollama_timeout_seconds, ollama_num_ctx, and prompt_body_max_chars must be > 0"
+        )
     return config

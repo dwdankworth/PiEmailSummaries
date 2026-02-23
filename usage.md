@@ -23,13 +23,24 @@ Edit `config/config.yaml` and set at least:
 - `telegram_chat_id`
 - `vip_senders` (optional but recommended)
 - `ollama_model` (default `phi3:mini`)
+- Optional Ollama tuning if you see slow/timeout summaries:
+  - `ollama_timeout_seconds` (default `180`)
+  - `ollama_num_ctx` (default `8192`)
+  - `prompt_body_max_chars` (default `6000`)
 
 ## 2) Add Gmail OAuth files
 
-Place these files in `config/` on the host:
+Place this file in `config/` on the host:
 
 - `config/credentials.json` (OAuth client credentials from Google Cloud Console)
-- `config/token.json` (authorized Gmail token for your account)
+
+Generate `config/token.json` with:
+
+```bash
+python scripts/generate_gmail_token.py
+```
+
+This opens a browser for Google consent and writes the authorized token for your account.
 
 These are bind-mounted into the fetcher container and are never baked into images.
 
