@@ -99,6 +99,7 @@ Run one immediate fetch + summarize + digest cycle:
 Equivalent commands:
 
 ```bash
+docker compose up -d
 docker compose exec -T fetcher python /app/fetcher/fetch_now.py
 docker compose exec -T summarizer python /app/summarizer/run_now.py
 ```

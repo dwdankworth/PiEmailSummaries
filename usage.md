@@ -79,6 +79,7 @@ docker compose logs -f fetcher summarizer telegram-bot
 Equivalent:
 
 ```bash
+docker compose up -d
 docker compose exec -T fetcher python /app/fetcher/fetch_now.py
 docker compose exec -T summarizer python /app/summarizer/run_now.py
 ```
