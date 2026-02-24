@@ -63,6 +63,7 @@ class AppConfig:
     ollama_url: str = "http://ollama:11434/api/generate"
     ollama_timeout_seconds: int = 180
     ollama_num_ctx: int = 8192
+    ollama_keep_alive: str = "0"
     prompt_body_max_chars: int = 6000
 
 
@@ -126,6 +127,7 @@ def load_config(config_path: str | None = None) -> AppConfig:
             raw_data.get("ollama_timeout_seconds", AppConfig().ollama_timeout_seconds)
         ),
         ollama_num_ctx=int(raw_data.get("ollama_num_ctx", AppConfig().ollama_num_ctx)),
+        ollama_keep_alive=str(raw_data.get("ollama_keep_alive", AppConfig().ollama_keep_alive)),
         prompt_body_max_chars=int(
             raw_data.get("prompt_body_max_chars", AppConfig().prompt_body_max_chars)
         ),

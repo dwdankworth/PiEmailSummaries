@@ -72,6 +72,7 @@ def _call_ollama(config: AppConfig, prompt: str) -> dict[str, Any]:
                     "prompt": prompt,
                     "stream": False,
                     "format": "json",
+                    "keep_alive": config.ollama_keep_alive,
                     "options": {"num_ctx": config.ollama_num_ctx},
                 },
                 timeout=float(config.ollama_timeout_seconds),

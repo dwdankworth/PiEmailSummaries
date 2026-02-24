@@ -27,6 +27,9 @@ ollama_model: "phi3:mini"
 ollama_url: "http://ollama:11434/api/generate"
 ollama_timeout_seconds: 180
 ollama_num_ctx: 8192
+# How long to keep the model loaded in memory after a request.
+# "0" = unload immediately (saves RAM/VRAM between cycles), "5m" = 5 minutes, "-1" = never unload.
+ollama_keep_alive: "0"
 prompt_body_max_chars: 6000
 
 telegram_bot_token: "replace-me"

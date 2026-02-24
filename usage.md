@@ -26,6 +26,7 @@ Edit `config/config.yaml` and set at least:
 - Optional Ollama tuning if you see slow/timeout summaries:
   - `ollama_timeout_seconds` (default `180`)
   - `ollama_num_ctx` (default `8192`)
+  - `ollama_keep_alive` (default `"0"` — unload model from memory immediately after each request to save RAM/VRAM; set `"5m"` to keep warm, `"-1"` to never unload)
   - `prompt_body_max_chars` (default `6000`)
 
 ## 2) Add Gmail OAuth files
