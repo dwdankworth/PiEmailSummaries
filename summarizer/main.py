@@ -2,23 +2,27 @@ from __future__ import annotations
 
 import signal
 import time
-from pathlib import Path
-import sys
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-sys.path.append(str(Path(__file__).resolve().parents[1]))
-
 from common.config import load_config
+from common.db import connect, init_schema
 from common.logging_utils import get_logger
-from summarizer.service import run_summarizer_cycle
+from summarizer.service import run_summarizer_cycle, validate_ollama_model
 
 LOGGER = get_logger("summarizer")
 
 
 def main() -> None:
     config = load_config()
+
+    # Initialize DB schema once at startup
+    connection = connect()
+    init_schema(connection)
+    connection.close()
+
+    validate_ollama_model(config)
     scheduler = BackgroundScheduler(timezone="UTC")
     for index, cron_expr in enumerate(config.summarizer_schedule):
         scheduler.add_job(
@@ -26,6 +30,8 @@ def main() -> None:
             trigger=CronTrigger.from_crontab(cron_expr, timezone="UTC"),
             id=f"summarizer-cron-{index}",
             kwargs={"trigger_digest": True},
+            max_instances=1,
+            coalesce=True,
         )
     scheduler.start()
     LOGGER.info(

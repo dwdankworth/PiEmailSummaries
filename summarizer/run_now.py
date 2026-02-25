@@ -5,10 +5,14 @@ import sys
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
+from common.db import connect, init_schema
 from summarizer.service import run_summarizer_cycle
 
 
 def main() -> None:
+    connection = connect()
+    init_schema(connection)
+    connection.close()
     run_summarizer_cycle(trigger_digest=True)
 
 

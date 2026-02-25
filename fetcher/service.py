@@ -4,7 +4,7 @@ from fnmatch import fnmatch
 from typing import Any
 
 from common.config import AppConfig, load_config
-from common.db import connect, init_schema, insert_email, record_system_event
+from common.db import connect, insert_email, record_system_event
 from common.logging_utils import get_logger
 from fetcher.gmail_client import build_gmail_service, list_recent_messages
 
@@ -32,7 +32,6 @@ def run_fetch_cycle(config_path: str | None = None, database_path: str | None = 
     service = build_gmail_service()
 
     connection = connect(database_path)
-    init_schema(connection)
     inserted = 0
     duplicates = 0
     skipped = 0
