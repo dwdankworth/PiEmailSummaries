@@ -98,29 +98,39 @@ def build_gmail_service() -> Resource:
     credentials = Credentials.from_authorized_user_file(token_path, SCOPES)
     if credentials.expired and credentials.refresh_token:
         credentials.refresh(Request())
-        # Atomic write: write to temp file then rename
+        # Write token back.  We try atomic rename first, but fall back to
+        # in-place write when the path is a Docker bind-mounted file (rename
+        # across mount points raises EBUSY).
         dir_name = os.path.dirname(token_path)
-        fd = tempfile.NamedTemporaryFile(
-            mode='w',
-            dir=dir_name,
-            delete=False,
-            suffix='.tmp',
-            encoding='utf-8',
-        )
+        token_json = credentials.to_json()
         try:
-            fd.write(credentials.to_json())
-            fd.flush()
-            os.fsync(fd.fileno())
-            fd.close()
-            os.chmod(fd.name, 0o600)
-            os.replace(fd.name, token_path)  # atomic on Unix/Linux
-        except BaseException:
-            fd.close()
+            fd = tempfile.NamedTemporaryFile(
+                mode='w',
+                dir=dir_name,
+                delete=False,
+                suffix='.tmp',
+                encoding='utf-8',
+            )
             try:
-                os.unlink(fd.name)
-            except OSError:
-                pass
-            raise
+                fd.write(token_json)
+                fd.flush()
+                os.fsync(fd.fileno())
+                fd.close()
+                os.chmod(fd.name, 0o600)
+                os.replace(fd.name, token_path)
+            except BaseException:
+                fd.close()
+                try:
+                    os.unlink(fd.name)
+                except OSError:
+                    pass
+                raise
+        except OSError:
+            # Fallback: write directly (bind-mounted file)
+            with open(token_path, 'w', encoding='utf-8') as f:
+                f.write(token_json)
+                f.flush()
+                os.fsync(f.fileno())
 
     return build("gmail", "v1", credentials=credentials, cache_discovery=False)
 
