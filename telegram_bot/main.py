@@ -1,13 +1,10 @@
 from __future__ import annotations
-from pathlib import Path
-import sys
+from functools import wraps
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
-
-sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 from common.config import load_config
 from common.logging_utils import get_logger
@@ -16,6 +13,26 @@ from telegram_bot.service import get_status, record_bot_event, run_digest, searc
 LOGGER = get_logger("telegram-bot")
 
 
+def authorized_only(handler):
+    """Decorator that restricts command handlers to the configured chat."""
+
+    @wraps(handler)
+    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        config = context.application.bot_data["config"]
+        chat_id = str(update.effective_chat.id)
+        if chat_id != config.telegram_chat_id:
+            LOGGER.warning(
+                "Unauthorized access attempt",
+                extra={"extra_json": {"chat_id": chat_id, "command": handler.__name__}},
+            )
+            await update.effective_message.reply_text("Unauthorized")
+            return
+        return await handler(update, context)
+
+    return wrapper
+
+
+@authorized_only
 async def digest_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     config = context.application.bot_data["config"]
     try:
@@ -29,6 +46,7 @@ async def digest_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await update.effective_message.reply_text(f"Digest failed: {exc}")
 
 
+@authorized_only
 async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     config = context.application.bot_data["config"]
     status = get_status(config)
@@ -47,6 +65,7 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     await update.effective_message.reply_text(text)
 
 
+@authorized_only
 async def search_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     keyword = " ".join(context.args).strip()
     if not keyword:
@@ -99,6 +118,8 @@ def main() -> None:
             args=[application],
             id=f"telegram-digest-{index}",
             replace_existing=True,
+            max_instances=1,
+            coalesce=True,
         )
     scheduler.start()
     LOGGER.info("Telegram bot scheduler started", extra={"extra_json": {"schedules": config.digest_schedule}})

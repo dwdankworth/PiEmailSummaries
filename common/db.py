@@ -3,9 +3,26 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+import time
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, TypeVar
+
+_T = TypeVar("_T")
+
+_MAX_RETRIES = 5
+
+
+def execute_with_retry(func: Callable[..., _T], *args: Any, **kwargs: Any) -> _T:
+    """Retry a DB operation on 'database is locked' with exponential backoff."""
+    for attempt in range(_MAX_RETRIES):
+        try:
+            return func(*args, **kwargs)
+        except sqlite3.OperationalError as exc:
+            if "database is locked" not in str(exc) or attempt == _MAX_RETRIES - 1:
+                raise
+            time.sleep(0.1 * (2 ** attempt))
+    raise RuntimeError("unreachable")  # pragma: no cover
 
 
 def _utcnow() -> str:
@@ -88,14 +105,17 @@ def initialize_database(database_path: str | None = None) -> None:
 def record_system_event(
     connection: sqlite3.Connection, service: str, event_type: str, details: dict[str, Any]
 ) -> None:
-    connection.execute(
-        """
-        INSERT INTO system_log (timestamp, service, event_type, details)
-        VALUES (?, ?, ?, ?)
-        """,
-        (_utcnow(), service, event_type, json.dumps(details, ensure_ascii=True)),
-    )
-    connection.commit()
+    def _do() -> None:
+        connection.execute(
+            """
+            INSERT INTO system_log (timestamp, service, event_type, details)
+            VALUES (?, ?, ?, ?)
+            """,
+            (_utcnow(), service, event_type, json.dumps(details, ensure_ascii=True)),
+        )
+        connection.commit()
+
+    execute_with_retry(_do)
 
 
 def insert_email(
@@ -110,29 +130,32 @@ def insert_email(
     headers: dict[str, str],
     is_vip: bool,
 ) -> int | None:
-    cursor = connection.execute(
-        """
-        INSERT OR IGNORE INTO emails
-            (gmail_id, thread_id, sender, recipients, subject, date, body_text, headers_json, is_vip, status, fetched_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
-        """,
-        (
-            gmail_id,
-            thread_id,
-            sender,
-            recipients,
-            subject,
-            date,
-            body_text,
-            json.dumps(headers, ensure_ascii=True),
-            int(is_vip),
-            _utcnow(),
-        ),
-    )
-    connection.commit()
-    if cursor.rowcount == 0:
-        return None
-    return int(cursor.lastrowid)
+    def _do() -> int | None:
+        cursor = connection.execute(
+            """
+            INSERT OR IGNORE INTO emails
+                (gmail_id, thread_id, sender, recipients, subject, date, body_text, headers_json, is_vip, status, fetched_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+            """,
+            (
+                gmail_id,
+                thread_id,
+                sender,
+                recipients,
+                subject,
+                date,
+                body_text,
+                json.dumps(headers, ensure_ascii=True),
+                int(is_vip),
+                _utcnow(),
+            ),
+        )
+        connection.commit()
+        if cursor.rowcount == 0:
+            return None
+        return int(cursor.lastrowid)
+
+    return execute_with_retry(_do)
 
 
 def fetch_pending_emails(connection: sqlite3.Connection, limit: int) -> list[sqlite3.Row]:
@@ -159,43 +182,46 @@ def save_summary(
     model_name: str,
     processing_seconds: float,
 ) -> None:
-    processed_at = _utcnow()
-    connection.execute(
-        """
-        INSERT INTO summaries
-            (email_id, summary_text, priority, categories, priority_reason, processed_at, delivered, model_name, processing_seconds)
-        VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)
-        ON CONFLICT(email_id) DO UPDATE SET
-            summary_text = excluded.summary_text,
-            priority = excluded.priority,
-            categories = excluded.categories,
-            priority_reason = excluded.priority_reason,
-            processed_at = excluded.processed_at,
-            delivered = 0,
-            delivered_at = NULL,
-            model_name = excluded.model_name,
-            processing_seconds = excluded.processing_seconds
-        """,
-        (
-            email_id,
-            summary_text,
-            priority,
-            json.dumps(categories, ensure_ascii=True),
-            priority_reason,
-            processed_at,
-            model_name,
-            processing_seconds,
-        ),
-    )
-    connection.execute(
-        """
-        UPDATE emails
-        SET status = 'processed', processed_at = ?, delivered_at = NULL
-        WHERE id = ?
-        """,
-        (processed_at, email_id),
-    )
-    connection.commit()
+    def _do() -> None:
+        processed_at = _utcnow()
+        connection.execute(
+            """
+            INSERT INTO summaries
+                (email_id, summary_text, priority, categories, priority_reason, processed_at, delivered, model_name, processing_seconds)
+            VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)
+            ON CONFLICT(email_id) DO UPDATE SET
+                summary_text = excluded.summary_text,
+                priority = excluded.priority,
+                categories = excluded.categories,
+                priority_reason = excluded.priority_reason,
+                processed_at = excluded.processed_at,
+                delivered = 0,
+                delivered_at = NULL,
+                model_name = excluded.model_name,
+                processing_seconds = excluded.processing_seconds
+            """,
+            (
+                email_id,
+                summary_text,
+                priority,
+                json.dumps(categories, ensure_ascii=True),
+                priority_reason,
+                processed_at,
+                model_name,
+                processing_seconds,
+            ),
+        )
+        connection.execute(
+            """
+            UPDATE emails
+            SET status = 'processed', processed_at = ?, delivered_at = NULL
+            WHERE id = ?
+            """,
+            (processed_at, email_id),
+        )
+        connection.commit()
+
+    execute_with_retry(_do)
 
 
 def fetch_undelivered_processed(connection: sqlite3.Connection) -> list[sqlite3.Row]:
@@ -216,27 +242,31 @@ def fetch_undelivered_processed(connection: sqlite3.Connection) -> list[sqlite3.
 def mark_delivered(connection: sqlite3.Connection, summary_ids: list[int]) -> None:
     if not summary_ids:
         return
-    placeholders = ",".join("?" for _ in summary_ids)
-    delivered_at = _utcnow()
-    connection.execute(
-        f"""
-        UPDATE summaries
-        SET delivered = 1, delivered_at = ?
-        WHERE id IN ({placeholders})
-        """,
-        (delivered_at, *summary_ids),
-    )
-    connection.execute(
-        f"""
-        UPDATE emails
-        SET status = 'delivered', delivered_at = ?
-        WHERE id IN (
-            SELECT email_id FROM summaries WHERE id IN ({placeholders})
+
+    def _do() -> None:
+        placeholders = ",".join("?" for _ in summary_ids)
+        delivered_at = _utcnow()
+        connection.execute(
+            f"""
+            UPDATE summaries
+            SET delivered = 1, delivered_at = ?
+            WHERE id IN ({placeholders})
+            """,
+            (delivered_at, *summary_ids),
         )
-        """,
-        (delivered_at, *summary_ids),
-    )
-    connection.commit()
+        connection.execute(
+            f"""
+            UPDATE emails
+            SET status = 'delivered', delivered_at = ?
+            WHERE id IN (
+                SELECT email_id FROM summaries WHERE id IN ({placeholders})
+            )
+            """,
+            (delivered_at, *summary_ids),
+        )
+        connection.commit()
+
+    execute_with_retry(_do)
 
 
 def search_summaries(connection: sqlite3.Connection, keyword: str, limit: int = 20) -> list[sqlite3.Row]:

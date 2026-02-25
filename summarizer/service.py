@@ -1,20 +1,16 @@
 from __future__ import annotations
 
 import json
+import re
 import time
-from pathlib import Path
-import sys
 from typing import Any
 
 import httpx
-
-sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 from common.config import AppConfig, load_config
 from common.db import (
     connect,
     fetch_pending_emails,
-    init_schema,
     record_system_event,
     save_summary,
 )
@@ -22,6 +18,23 @@ from common.logging_utils import get_logger
 from common.telegram_digest import send_digest_and_mark_delivered
 
 LOGGER = get_logger("summarizer")
+
+
+def validate_ollama_model(config: AppConfig) -> None:
+    """Check that the configured model is available in Ollama."""
+    try:
+        tags_url = config.ollama_url.rsplit("/", 1)[0] + "/tags"
+        response = httpx.get(tags_url, timeout=10.0)
+        if response.status_code == 200:
+            models = [m["name"] for m in response.json().get("models", [])]
+            if config.ollama_model not in models:
+                LOGGER.warning(
+                    "Model %s not found in Ollama. Available: %s",
+                    config.ollama_model,
+                    models,
+                )
+    except Exception:
+        LOGGER.warning("Could not validate Ollama model availability")
 
 
 def _direct_recipient(recipients: str, user_email: str) -> bool:
@@ -40,6 +53,49 @@ def _keyword_matches(subject: str, body: str, priority_keywords: list[str]) -> l
     return [keyword for keyword in priority_keywords if keyword.lower() in text]
 
 
+_INJECTION_PHRASES = [
+    "ignore previous instructions",
+    "ignore all previous",
+    "ignore above",
+    "disregard previous",
+    "new instructions",
+    "override instructions",
+]
+
+_ROLE_LINE_RE = re.compile(r"^(system|assistant|user):", re.IGNORECASE | re.MULTILINE)
+
+_HEADER_LINE_RE = re.compile(r"^###", re.MULTILINE)
+
+
+def _sanitize_for_prompt(text: str) -> str:
+    """Neutralize common prompt injection patterns in untrusted email content.
+
+    This is a lightweight heuristic filter — not a security boundary — that
+    strips the most common attempts to hijack the LLM prompt via crafted
+    email subjects or bodies before they are interpolated into the template.
+    """
+    for phrase in _INJECTION_PHRASES:
+        # Case-insensitive replacement without regex for simple substrings
+        lower = text.lower()
+        start = 0
+        while True:
+            idx = lower.find(phrase, start)
+            if idx == -1:
+                break
+            text = text[:idx] + "[filtered]" + text[idx + len(phrase):]
+            lower = text.lower()
+            start = idx + len("[filtered]")
+
+    # Remove role markers that could confuse the LLM
+    text = _ROLE_LINE_RE.sub("[filtered]", text)
+
+    # Neutralize markdown/formatting injection
+    text = text.replace("```", "`")
+    text = _HEADER_LINE_RE.sub("# ", text)
+
+    return text
+
+
 def _build_prompt(config: AppConfig, row: dict[str, Any], matched_keywords: list[str]) -> str:
     headers = json.loads(row["headers_json"])
     body_text = str(row["body_text"])
@@ -48,6 +104,8 @@ def _build_prompt(config: AppConfig, row: dict[str, Any], matched_keywords: list
             body_text[: config.prompt_body_max_chars]
             + "\n\n[...email body truncated for model context window...]"
         )
+    body_text = _sanitize_for_prompt(body_text)
+    subject = _sanitize_for_prompt(str(row["subject"]))
     return config.prompt_template.format(
         is_vip=bool(row["is_vip"]),
         is_direct=_direct_recipient(headers.get("to", ""), config.gmail_user_email),
@@ -55,7 +113,7 @@ def _build_prompt(config: AppConfig, row: dict[str, Any], matched_keywords: list
         matched_keywords=", ".join(matched_keywords) if matched_keywords else "none",
         sender=row["sender"],
         recipients=headers.get("to", ""),
-        subject=row["subject"],
+        subject=subject,
         date=row["date"],
         body_text=body_text,
     )
@@ -89,8 +147,11 @@ def _call_ollama(config: AppConfig, prompt: str) -> dict[str, Any]:
         except Exception as exc:  # retry and surface if all retries fail
             last_error = exc
             LOGGER.warning(
-                "Ollama call failed, retrying",
-                extra={"extra_json": {"attempt": attempt, "error": str(exc)}},
+                "Ollama call attempt %d/%d failed, %s",
+                attempt,
+                3,
+                "retrying" if attempt < 3 else "giving up",
+                extra={"extra_json": {"attempt": attempt, "error": str(exc), "model": config.ollama_model}},
             )
             time.sleep(attempt * 2)
     if last_error is None:
@@ -127,7 +188,6 @@ def run_summarizer_cycle(
 ) -> dict[str, Any]:
     config = load_config(config_path)
     connection = connect(database_path)
-    init_schema(connection)
 
     started = time.perf_counter()
     processed = 0

@@ -2,14 +2,50 @@ from __future__ import annotations
 
 import base64
 import os
+import socket
+import tempfile
+import time
 from email.utils import parseaddr
 from typing import Any
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import Resource, build
+from googleapiclient.errors import HttpError
+
+from common.logging_utils import get_logger
 
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
+LOGGER = get_logger("fetcher")
+_GMAIL_MAX_RETRIES = 3
+
+
+def _execute_with_retry(request, description: str = "Gmail API call"):
+    """Execute a Google API request with retry logic for transient errors."""
+    last_error: Exception | None = None
+    for attempt in range(1, _GMAIL_MAX_RETRIES + 1):
+        try:
+            return request.execute(num_retries=2)
+        except HttpError as exc:
+            last_error = exc
+            if exc.resp.status < 500:
+                raise  # Don't retry client errors
+            LOGGER.warning(
+                "%s failed (HTTP %s), retrying",
+                description,
+                exc.resp.status,
+                extra={"extra_json": {"attempt": attempt, "error": str(exc)}},
+            )
+        except (socket.timeout, OSError) as exc:
+            last_error = exc
+            LOGGER.warning(
+                "%s network error, retrying",
+                description,
+                extra={"extra_json": {"attempt": attempt, "error": str(exc)}},
+            )
+        if attempt < _GMAIL_MAX_RETRIES:
+            time.sleep(1.0 * (2 ** (attempt - 1)))
+    raise last_error  # type: ignore[misc]
 
 
 def _decode_body(payload: dict[str, Any]) -> str:
@@ -62,27 +98,48 @@ def build_gmail_service() -> Resource:
     credentials = Credentials.from_authorized_user_file(token_path, SCOPES)
     if credentials.expired and credentials.refresh_token:
         credentials.refresh(Request())
-        with open(token_path, "w", encoding="utf-8") as token_file:
-            token_file.write(credentials.to_json())
+        # Atomic write: write to temp file then rename
+        dir_name = os.path.dirname(token_path)
+        fd = tempfile.NamedTemporaryFile(
+            mode='w',
+            dir=dir_name,
+            delete=False,
+            suffix='.tmp',
+            encoding='utf-8',
+        )
+        try:
+            fd.write(credentials.to_json())
+            fd.flush()
+            os.fsync(fd.fileno())
+            fd.close()
+            os.chmod(fd.name, 0o600)
+            os.replace(fd.name, token_path)  # atomic on Unix/Linux
+        except BaseException:
+            fd.close()
+            try:
+                os.unlink(fd.name)
+            except OSError:
+                pass
+            raise
 
     return build("gmail", "v1", credentials=credentials, cache_discovery=False)
 
 
 def list_recent_messages(service: Resource, max_results: int) -> list[dict[str, Any]]:
-    response = (
+    response = _execute_with_retry(
         service.users()
         .messages()
-        .list(userId="me", maxResults=max_results, includeSpamTrash=False)
-        .execute()
+        .list(userId="me", maxResults=max_results, includeSpamTrash=False),
+        description="messages.list",
     )
     messages = response.get("messages", [])
     output: list[dict[str, Any]] = []
     for message_ref in messages:
-        message = (
+        message = _execute_with_retry(
             service.users()
             .messages()
-            .get(userId="me", id=message_ref["id"], format="full")
-            .execute()
+            .get(userId="me", id=message_ref["id"], format="full"),
+            description=f"messages.get({message_ref['id']})",
         )
         payload = message.get("payload", {})
         headers = _headers_map(payload)
