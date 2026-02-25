@@ -3,13 +3,9 @@ from __future__ import annotations
 import json
 import re
 import time
-from pathlib import Path
-import sys
 from typing import Any
 
 import httpx
-
-sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 from common.config import AppConfig, load_config
 from common.db import (

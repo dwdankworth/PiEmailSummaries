@@ -15,11 +15,15 @@ services:
       - "11434"
     # Verify that the configured model is actually loaded before dependents start.
     healthcheck:
-      test: ["CMD-SHELL", "ollama list | grep -q \"$$OLLAMA_MODEL\""]
+      test: ["CMD-SHELL", "ollama list | grep -Fq \"$$OLLAMA_MODEL\""]
       interval: 30s
       timeout: 10s
       retries: 10
       start_period: 120s
+    deploy:
+      resources:
+        limits:
+          memory: 4G
     restart: unless-stopped
     networks:
       - email-internal
@@ -40,11 +44,15 @@ services:
       - ./config/token.json:/secrets/token.json
       - ./config/credentials.json:/secrets/credentials.json:ro
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"from common.db import initialize_database; initialize_database()\""]
+      test: ["CMD-SHELL", "pgrep -f 'python.*main.py' > /dev/null"]
       interval: 60s
       timeout: 10s
       retries: 3
       start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
     restart: unless-stopped
     networks:
       - email-internal
@@ -64,34 +72,15 @@ services:
       - email-data:/data
       - ./config/config.yaml:/config/config.yaml:ro
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"from common.db import initialize_database; initialize_database()\""]
+      test: ["CMD-SHELL", "pgrep -f 'python.*main.py' > /dev/null"]
       interval: 60s
       timeout: 10s
       retries: 3
       start_period: 20s
-    restart: unless-stopped
-    networks:
-      - email-internal
-
-  telegram-bot:
-    build:
-      context: .
-      dockerfile: telegram_bot/Dockerfile
-    depends_on:
-      summarizer:
-        condition: service_started
-    environment:
-      CONFIG_PATH: /config/config.yaml
-      DATABASE_PATH: /data/email_summaries.db
-    volumes:
-      - email-data:/data
-      - ./config/config.yaml:/config/config.yaml:ro
-    healthcheck:
-      test: ["CMD-SHELL", "python -c \"from common.db import initialize_database; initialize_database()\""]
-      interval: 60s
-      timeout: 10s
-      retries: 3
-      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
     restart: unless-stopped
     networks:
       - email-internal
