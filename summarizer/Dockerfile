@@ -17,6 +17,8 @@ COPY summarizer /app/summarizer
 
 # Note: bind-mounted files (token.json) must be writable by UID of appuser.
 # On host, ensure: chmod 666 config/token.json or match UID.
+RUN mkdir -p /data /config && chown appuser:appuser /data /config
+
 USER appuser
 
 # This process schedules triage runs and also supports one-shot run_now.py.
