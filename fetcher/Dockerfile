@@ -18,6 +18,8 @@ COPY telegram_bot /app/telegram_bot
 
 # Note: bind-mounted files (token.json) must be writable by UID of appuser.
 # On host, ensure: chmod 666 config/token.json or match UID.
+RUN mkdir -p /data /config /secrets && chown appuser:appuser /data /config /secrets
+
 USER appuser
 
 # Unified entrypoint: runs email fetcher scheduler + Telegram bot in one process.
