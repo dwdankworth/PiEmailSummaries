@@ -498,3 +498,124 @@ Expected resource usage on a Raspberry Pi 5 (8 GB):
 **Temperature:** The Pi will warm up during summarization. A heatsink or case
 with passive cooling is recommended. The workload is bursty (a few seconds of
 processing, then idle), so thermal throttling is unlikely under normal use.
+
+## 14. Disabling and Re-enabling
+
+### Stop temporarily (services off, data preserved)
+
+```bash
+cd ~/EmailSummaries
+docker compose down
+```
+
+This stops all containers. Nothing runs, no emails are fetched, no digests are
+sent. Your database, config, and AI model are all preserved on disk.
+
+### Start again
+
+```bash
+cd ~/EmailSummaries
+docker compose up -d
+```
+
+Everything resumes. Emails that arrived while the service was off will be
+fetched on the next cycle.
+
+### Disable auto-start on boot
+
+By default Docker restarts containers after a reboot (the `restart: unless-stopped`
+policy in docker-compose.yml). To prevent that:
+
+```bash
+cd ~/EmailSummaries
+docker compose down
+```
+
+Containers that have been explicitly stopped with `docker compose down` do **not**
+restart on boot — `unless-stopped` only auto-starts containers that were running
+when the Pi shut down. So simply stopping the stack is enough to keep it off
+across reboots.
+
+If you want the services back on the next reboot without manually starting them:
+
+```bash
+docker compose up -d
+```
+
+### Pause just the AI summarizer (keep fetching email)
+
+```bash
+docker compose stop summarizer
+```
+
+Emails will continue to be fetched and queued. When you're ready to catch up:
+
+```bash
+docker compose start summarizer
+```
+
+## 15. Uninstalling
+
+### Quick uninstall (remove containers and images, keep your data)
+
+```bash
+cd ~/EmailSummaries
+
+# Stop and remove containers, networks
+docker compose down
+
+# Remove the Docker images built for this project
+docker compose down --rmi all
+```
+
+Your config files, database, and the downloaded AI model are still on disk after
+this step.
+
+### Full uninstall (remove everything)
+
+```bash
+cd ~/EmailSummaries
+
+# Stop containers and remove images
+docker compose down --rmi all
+
+# Remove the AI model stored by Ollama
+docker volume rm emailsummaries_ollama_data 2>/dev/null || true
+
+# Remove the email database
+rm -rf data/
+
+# Go up and remove the project directory
+cd ~
+rm -rf EmailSummaries
+```
+
+### Remove Docker itself (optional)
+
+If EmailSummaries was the only reason you installed Docker:
+
+```bash
+sudo apt remove --purge docker-ce docker-ce-cli containerd.io \
+  docker-buildx-plugin docker-compose-plugin -y
+sudo apt autoremove -y
+sudo rm -rf /var/lib/docker /var/lib/containerd
+# Remove your user from the docker group
+sudo gpasswd -d $USER docker
+```
+
+Log out and back in for the group change to take effect.
+
+### Revoke Gmail access (recommended after uninstall)
+
+1. Go to <https://myaccount.google.com/permissions>
+2. Find the app name you used when creating credentials
+3. Click it and choose **Remove Access**
+
+This prevents the (now-deleted) token from being used if someone recovers it
+from your SD card.
+
+### Delete the Telegram bot (optional)
+
+1. Open Telegram, find **@BotFather**
+2. Send `/deletebot`
+3. Select your EmailSummaries bot from the list
