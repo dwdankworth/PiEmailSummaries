@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime
 from functools import wraps
+from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -116,14 +117,14 @@ def main() -> None:
     init_schema(connection)
     connection.close()
 
-    scheduler = BackgroundScheduler(timezone="UTC")
+    scheduler = BackgroundScheduler(timezone=config.timezone)
 
     # Fetcher: periodic email fetch
     scheduler.add_job(
         run_fetch_cycle,
         "interval",
         minutes=config.fetch_interval_minutes,
-        next_run_time=datetime.now(UTC),
+        next_run_time=datetime.now(ZoneInfo(config.timezone)),
         max_instances=1,
         coalesce=True,
     )
@@ -144,7 +145,7 @@ def main() -> None:
     for index, cron_expr in enumerate(config.digest_schedule):
         scheduler.add_job(
             _run_scheduled_digest,
-            trigger=CronTrigger.from_crontab(cron_expr, timezone="UTC"),
+            trigger=CronTrigger.from_crontab(cron_expr, timezone=config.timezone),
             args=[application],
             id=f"telegram-digest-{index}",
             replace_existing=True,
@@ -158,6 +159,7 @@ def main() -> None:
         extra={"extra_json": {
             "fetch_interval_minutes": config.fetch_interval_minutes,
             "digest_schedules": config.digest_schedule,
+            "timezone": config.timezone,
         }},
     )
 

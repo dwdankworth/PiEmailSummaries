@@ -40,6 +40,11 @@ gmail_max_results: 25
 summarizer_batch_size: 20
 fetch_interval_minutes: 20
 
+# Timezone for cron schedules (summarizer_schedule, digest_schedule).
+# Leave empty or omit to auto-detect from TZ env var / system timezone.
+# Examples: "America/Los_Angeles", "US/Eastern", "Europe/London", "UTC"
+# timezone: "America/Los_Angeles"
+
 prompt_template: |
   You are an email triage assistant. Analyze the following email and respond with ONLY valid JSON, no other text.
 

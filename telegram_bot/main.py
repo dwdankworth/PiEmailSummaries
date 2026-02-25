@@ -110,11 +110,11 @@ def main() -> None:
     application.add_handler(CommandHandler("status", status_command))
     application.add_handler(CommandHandler("search", search_command))
 
-    scheduler = BackgroundScheduler(timezone="UTC")
+    scheduler = BackgroundScheduler(timezone=config.timezone)
     for index, cron_expr in enumerate(config.digest_schedule):
         scheduler.add_job(
             _run_scheduled_digest,
-            trigger=CronTrigger.from_crontab(cron_expr, timezone="UTC"),
+            trigger=CronTrigger.from_crontab(cron_expr, timezone=config.timezone),
             args=[application],
             id=f"telegram-digest-{index}",
             replace_existing=True,
@@ -122,7 +122,7 @@ def main() -> None:
             coalesce=True,
         )
     scheduler.start()
-    LOGGER.info("Telegram bot scheduler started", extra={"extra_json": {"schedules": config.digest_schedule}})
+    LOGGER.info("Telegram bot scheduler started", extra={"extra_json": {"schedules": config.digest_schedule, "timezone": config.timezone}})
     try:
         application.run_polling()
     finally:

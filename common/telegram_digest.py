@@ -157,6 +157,7 @@ def _split_digest_text(full_text: str) -> list[str]:
 def send_digest_and_mark_delivered(connection, config: AppConfig, source_service: str) -> int:
     rows = [dict(row) for row in fetch_undelivered_processed(connection)]
     if not rows:
+        LOGGER.info("No undelivered summaries to send", extra={"extra_json": {"source": source_service}})
         return 0
 
     if not config.telegram_bot_token or not config.telegram_chat_id:
