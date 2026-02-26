@@ -7,10 +7,14 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+RUN groupadd -g 1000 appuser && useradd -u 1000 -g appuser -d /app appuser
+
 COPY telegram_bot/requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
 COPY common /app/common
 COPY telegram_bot /app/telegram_bot
+
+USER appuser
 
 CMD ["python", "/app/telegram_bot/main.py"]

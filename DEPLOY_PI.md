@@ -138,6 +138,7 @@ From your computer, copy the downloaded file to the Pi:
 
 ```bash
 scp ~/Downloads/client_secret_*.json your-username@emailpi.local:~/EmailSummaries/config/credentials.json
+ssh your-username@emailpi.local "chmod 600 ~/EmailSummaries/config/credentials.json"
 ```
 
 ### Generate the Gmail Token
@@ -161,6 +162,7 @@ access. The script creates `config/token.json`. Copy it to the Pi:
 
 ```bash
 scp config/token.json your-username@emailpi.local:~/EmailSummaries/config/token.json
+ssh your-username@emailpi.local "chmod 600 ~/EmailSummaries/config/token.json"
 ```
 
 **Option B — Run on the Pi with SSH port forwarding:**
@@ -248,7 +250,28 @@ Save and exit nano: press `Ctrl+X`, then `Y`, then `Enter`.
 Your config and token files contain secrets. Restrict access:
 
 ```bash
-chmod 600 config/config.yaml config/token.json
+chmod 600 config/config.yaml config/credentials.json config/token.json
+chown $USER:$USER config/config.yaml config/credentials.json config/token.json
+```
+
+The containers run as UID/GID `1000` by default, which matches the default first
+user on Raspberry Pi OS. Keeping these files owned by your Pi user allows secure
+`600` permissions while still allowing token refresh.
+
+### Basic Pi Hardening (Recommended)
+
+```bash
+# Keep the OS patched
+sudo apt update && sudo apt full-upgrade -y
+
+# Enable unattended security updates
+sudo apt install -y unattended-upgrades
+sudo dpkg-reconfigure -plow unattended-upgrades
+
+# Limit inbound network access to SSH only
+sudo apt install -y ufw
+sudo ufw allow OpenSSH
+sudo ufw --force enable
 ```
 
 ## 9. Start Everything
