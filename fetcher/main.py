@@ -117,7 +117,12 @@ def main() -> None:
     init_schema(connection)
     connection.close()
 
-    scheduler = BackgroundScheduler(timezone=config.timezone)
+    # Allow up to 15 minutes of grace so jobs still fire after device
+    # sleep / wake cycles instead of being silently skipped (default is 1 s).
+    scheduler = BackgroundScheduler(
+        timezone=config.timezone,
+        job_defaults={"misfire_grace_time": 900},
+    )
 
     # Fetcher: periodic email fetch
     scheduler.add_job(

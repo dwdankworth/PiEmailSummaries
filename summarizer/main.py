@@ -23,7 +23,12 @@ def main() -> None:
     connection.close()
 
     validate_ollama_model(config)
-    scheduler = BackgroundScheduler(timezone=config.timezone)
+    # Allow up to 15 minutes of grace so jobs still fire after device
+    # sleep / wake cycles instead of being silently skipped (default is 1 s).
+    scheduler = BackgroundScheduler(
+        timezone=config.timezone,
+        job_defaults={"misfire_grace_time": 900},
+    )
     for index, cron_expr in enumerate(config.summarizer_schedule):
         scheduler.add_job(
             run_summarizer_cycle,
