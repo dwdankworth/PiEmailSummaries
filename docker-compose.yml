@@ -37,6 +37,7 @@ services:
       DATABASE_PATH: /data/email_summaries.db
       GMAIL_TOKEN_PATH: /secrets/token.json
       GMAIL_CREDENTIALS_PATH: /secrets/credentials.json
+      TZ: ${TZ:-UTC}
     # Bind-mount config and Gmail OAuth files from host; keep secrets out of images.
     volumes:
       - email-data:/data
@@ -67,6 +68,7 @@ services:
     environment:
       CONFIG_PATH: /config/config.yaml
       DATABASE_PATH: /data/email_summaries.db
+      TZ: ${TZ:-UTC}
     # Uses internal-only Ollama URL (http://ollama:11434) on the private Docker network.
     volumes:
       - email-data:/data

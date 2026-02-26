@@ -23,11 +23,11 @@ def main() -> None:
     connection.close()
 
     validate_ollama_model(config)
-    scheduler = BackgroundScheduler(timezone="UTC")
+    scheduler = BackgroundScheduler(timezone=config.timezone)
     for index, cron_expr in enumerate(config.summarizer_schedule):
         scheduler.add_job(
             run_summarizer_cycle,
-            trigger=CronTrigger.from_crontab(cron_expr, timezone="UTC"),
+            trigger=CronTrigger.from_crontab(cron_expr, timezone=config.timezone),
             id=f"summarizer-cron-{index}",
             kwargs={"trigger_digest": True},
             max_instances=1,
@@ -36,7 +36,7 @@ def main() -> None:
     scheduler.start()
     LOGGER.info(
         "Summarizer scheduler started",
-        extra={"extra_json": {"schedules": config.summarizer_schedule}},
+        extra={"extra_json": {"schedules": config.summarizer_schedule, "timezone": config.timezone}},
     )
 
     def _shutdown(*_: object) -> None:

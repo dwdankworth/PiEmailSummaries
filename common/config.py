@@ -4,6 +4,7 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import yaml
 
@@ -65,6 +66,36 @@ class AppConfig:
     ollama_num_ctx: int = 8192
     ollama_keep_alive: str = "0"
     prompt_body_max_chars: int = 6000
+    timezone: str = ""
+
+
+def _resolve_timezone(raw_value: str | None) -> str:
+    """Resolve timezone: config value → TZ env var → system detection → UTC."""
+    candidates: list[str] = []
+    if raw_value:
+        candidates.append(raw_value)
+    env_tz = os.environ.get("TZ")
+    if env_tz:
+        candidates.append(env_tz)
+    # Detect from /etc/timezone (Debian/Ubuntu/Raspbian)
+    try:
+        candidates.append(Path("/etc/timezone").read_text().strip())
+    except OSError:
+        pass
+    # Detect from /etc/localtime symlink
+    try:
+        link = os.readlink("/etc/localtime")
+        if "zoneinfo/" in link:
+            candidates.append(link.split("zoneinfo/", 1)[1])
+    except OSError:
+        pass
+    for tz_name in candidates:
+        try:
+            ZoneInfo(tz_name)
+            return tz_name
+        except (KeyError, ValueError):
+            continue
+    return "UTC"
 
 
 def _to_list(value: Any, fallback: list[str]) -> list[str]:
@@ -131,6 +162,7 @@ def load_config(config_path: str | None = None) -> AppConfig:
         prompt_body_max_chars=int(
             raw_data.get("prompt_body_max_chars", AppConfig().prompt_body_max_chars)
         ),
+        timezone=_resolve_timezone(raw_data.get("timezone")),
     )
     if config.gmail_max_results <= 0 or config.summarizer_batch_size <= 0:
         raise ValueError("gmail_max_results and summarizer_batch_size must be > 0")
