@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import signal
 import time
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.triggers.cron import CronTrigger
 
 from common.config import load_config
 from common.db import connect, init_schema
@@ -29,19 +30,20 @@ def main() -> None:
         timezone=config.timezone,
         job_defaults={"misfire_grace_time": 900},
     )
-    for index, cron_expr in enumerate(config.summarizer_schedule):
-        scheduler.add_job(
-            run_summarizer_cycle,
-            trigger=CronTrigger.from_crontab(cron_expr, timezone=config.timezone),
-            id=f"summarizer-cron-{index}",
-            kwargs={"trigger_digest": True},
-            max_instances=1,
-            coalesce=True,
-        )
+    scheduler.add_job(
+        run_summarizer_cycle,
+        "interval",
+        minutes=config.summarizer_interval_minutes,
+        next_run_time=datetime.now(ZoneInfo(config.timezone)),
+        id="summarizer-interval",
+        kwargs={"trigger_digest": False},
+        max_instances=1,
+        coalesce=True,
+    )
     scheduler.start()
     LOGGER.info(
         "Summarizer scheduler started",
-        extra={"extra_json": {"schedules": config.summarizer_schedule, "timezone": config.timezone}},
+        extra={"extra_json": {"interval_minutes": config.summarizer_interval_minutes, "timezone": config.timezone}},
     )
 
     def _shutdown(*_: object) -> None:

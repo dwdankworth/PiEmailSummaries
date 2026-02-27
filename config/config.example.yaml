@@ -14,13 +14,17 @@ priority_keywords:
 
 digest_schedule:
   - "0 8 * * *"
-  - "0 13 * * *"
-  - "0 18 * * *"
+  - "0 16 * * *"
 
-summarizer_schedule:
-  - "0 8 * * *"
-  - "0 13 * * *"
-  - "0 18 * * *"
+# How often (in minutes) the summarizer checks for and processes pending emails.
+summarizer_interval_minutes: 2
+
+# Legacy cron-based summarizer schedule (no longer used by default;
+# the summarizer now polls on summarizer_interval_minutes).
+# summarizer_schedule:
+#   - "0 8 * * *"
+#   - "0 13 * * *"
+#   - "0 18 * * *"
 
 # Must match OLLAMA_MODEL env var in docker-compose.yml so the model is auto-pulled.
 ollama_model: "gemma3:1b"

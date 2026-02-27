@@ -48,11 +48,12 @@ class AppConfig:
         default_factory=lambda: ["urgent", "deadline", "action required"]
     )
     digest_schedule: list[str] = field(
-        default_factory=lambda: ["0 8 * * *", "0 13 * * *", "0 18 * * *"]
+        default_factory=lambda: ["0 8 * * *", "0 16 * * *"]
     )
     summarizer_schedule: list[str] = field(
         default_factory=lambda: ["0 8 * * *", "0 13 * * *", "0 18 * * *"]
     )
+    summarizer_interval_minutes: int = 2
     ollama_model: str = "phi3:mini"
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
@@ -137,6 +138,9 @@ def load_config(config_path: str | None = None) -> AppConfig:
         summarizer_schedule=_to_list(
             raw_data.get("summarizer_schedule"), AppConfig().summarizer_schedule
         ),
+        summarizer_interval_minutes=int(
+            raw_data.get("summarizer_interval_minutes", AppConfig().summarizer_interval_minutes)
+        ),
         ollama_model=str(raw_data.get("ollama_model", AppConfig().ollama_model)),
         telegram_bot_token=str(raw_data.get("telegram_bot_token", "")),
         telegram_chat_id=str(raw_data.get("telegram_chat_id", "")),
@@ -166,6 +170,8 @@ def load_config(config_path: str | None = None) -> AppConfig:
     )
     if config.gmail_max_results <= 0 or config.summarizer_batch_size <= 0:
         raise ValueError("gmail_max_results and summarizer_batch_size must be > 0")
+    if config.summarizer_interval_minutes <= 0:
+        raise ValueError("summarizer_interval_minutes must be > 0")
     if config.ollama_timeout_seconds <= 0 or config.ollama_num_ctx <= 0 or config.prompt_body_max_chars <= 0:
         raise ValueError(
             "ollama_timeout_seconds, ollama_num_ctx, and prompt_body_max_chars must be > 0"
