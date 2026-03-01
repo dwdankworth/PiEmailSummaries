@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from common.config import AppConfig, _to_list, load_config
+from common.config import _to_list, load_config
 
 
 class TestLoadConfig:

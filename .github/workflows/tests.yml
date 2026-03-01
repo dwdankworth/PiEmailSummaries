@@ -24,5 +24,8 @@ jobs:
           pip install -r summarizer/requirements.txt
           pip install -r fetcher/requirements.txt
 
+      - name: Lint
+        run: ruff check .
+
       - name: Run tests
         run: python -m pytest tests/ -v
