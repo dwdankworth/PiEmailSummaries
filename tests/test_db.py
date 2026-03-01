@@ -2,13 +2,11 @@
 from __future__ import annotations
 
 import sqlite3
-from unittest.mock import MagicMock
 
 from common.db import (
     execute_with_retry,
     fetch_pending_emails,
     fetch_undelivered_processed,
-    init_schema,
     insert_email,
     mark_delivered,
     save_summary,

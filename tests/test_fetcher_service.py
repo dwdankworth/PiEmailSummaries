@@ -1,7 +1,6 @@
 """Tests for fetcher/service.py — VIP matching and skip logic."""
 from __future__ import annotations
 
-from common.config import AppConfig
 from fetcher.service import _sender_is_vip, _should_skip
 
 

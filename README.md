@@ -1,117 +1,129 @@
 # EmailSummaries
 
-Local-first email triage for Raspberry Pi 5 using Docker Compose, Ollama, Gmail API, SQLite, and Telegram.
+A self-hosted AI email pipeline that fetches your Gmail, summarizes each message with a local LLM, and delivers prioritized digests to Telegram — all running on a Raspberry Pi 5. No cloud AI services, no subscriptions, no data leaving your network.
 
-## Services
+## Highlights
 
-`docker-compose.yml` defines 4 containers:
+- **100% local AI** — uses [Ollama](https://ollama.com/) to run an LLM entirely on-device; your email content never touches a third-party API
+- **Privacy-first** — credentials stay on your hardware, traffic stays on a private Docker network, and the database lives on local storage
+- **Runs on a Raspberry Pi 5** — designed for 8 GB RAM and an SSD; lightweight enough for always-on home server use
+- **Automated pipeline** — fetches email on a schedule, summarizes immediately, and sends Telegram digests at configurable times
+- **VIP & filter rules** — wildcard sender matching, category/label filtering, and priority boosting so you see what matters first
 
-1. `ollama` (local LLM API)
-2. `fetcher` (Gmail ingest + Tier-1 filtering)
-3. `summarizer` (Tier-2 LLM triage + digest trigger)
-4. `telegram-bot` (`/digest`, `/status`, `/search`)
+## Tech Stack
 
-Data is stored in SQLite (`email-data` volume), and all services read `config/config.yaml` via read-only bind mount.
+| Component | Role |
+|-----------|------|
+| **Python** | All service code |
+| **Docker Compose** | Orchestration (4 containers on a private network) |
+| **Ollama** | Local LLM inference (e.g. Gemma 3 1B) |
+| **Gmail API** | Read-only OAuth access to your inbox |
+| **SQLite (WAL mode)** | Shared queue and state database |
+| **Telegram Bot API** | Digest delivery and interactive commands |
+| **GitHub Actions** | CI — lint (Ruff) + pytest on every push/PR |
+
+## How It Works
+
+```
+Gmail ──▶ Fetcher ──▶ SQLite ──▶ Summarizer ──▶ SQLite ──▶ Telegram Bot ──▶ You
+          (filter &      (pending     (local LLM      (processed     (scheduled
+           ingest)        queue)       triage)          summaries)     digests)
+```
+
+1. **Fetcher** polls Gmail on a schedule, filters out noise (promotions, list-unsubscribe), marks VIPs, and inserts emails as `pending`.
+2. **Summarizer** picks up pending emails, builds a prompt with sanitized content, calls Ollama, normalizes priority (1–5), and saves summaries as `processed`.
+3. **Telegram Bot** sends prioritized digests on a cron schedule (or on-demand via `/digest`), marking items `delivered`.
 
 ## Repository Layout
 
 ```text
-common/         shared config, SQLite, logging, digest helpers
-fetcher/        Gmail polling service + one-shot fetch_now.py
-summarizer/     Ollama triage service + one-shot run_now.py
-telegram_bot/   Telegram command bot + scheduled digests
-config/         config.yaml + config.example.yaml
-scripts/        init_db.py + manual_cycle.sh
-docker-compose.yml
+common/            shared config, SQLite helpers, logging, digest builder
+fetcher/           Gmail polling service + one-shot fetch_now.py
+summarizer/        Ollama summarization service + one-shot run_now.py
+telegram_bot/      Telegram command handler + scheduled digests
+config/            config.example.yaml (runtime config template)
+scripts/           init_db.py, manual_cycle.sh, generate_gmail_token.py
+tests/             pytest suite (20 unit tests)
+.github/workflows/ CI pipeline (lint + test)
 ```
 
-## 1) Docker Fundamentals (Ollama-only smoke test)
+## Getting Started
 
-Start just Ollama:
+### 1. Smoke-test Ollama
 
 ```bash
 docker compose up -d ollama
-docker compose exec ollama ollama pull phi3:mini
+docker compose exec ollama ollama pull gemma3:1b
 docker compose exec ollama ollama list
 ```
 
-Test inference from inside the Docker network:
-
-```bash
-docker compose exec ollama sh -lc \
-  "curl -s http://localhost:11434/api/generate -d '{\"model\":\"phi3:mini\",\"prompt\":\"Say hi\",\"stream\":false}'"
-```
-
-## 2) Configure Gmail + Telegram + runtime config
-
-Copy and edit config:
+### 2. Configure credentials
 
 ```bash
 cp config/config.example.yaml config/config.yaml
+# Edit config.yaml: add telegram_bot_token, telegram_chat_id, filters, schedules
 ```
 
-Required host files (bind-mounted, never baked into images):
+Required host files (bind-mounted at runtime, never baked into images):
 
-- `config/credentials.json` (Google Cloud OAuth client)
-- `config/config.yaml` (`telegram_bot_token`, `telegram_chat_id`, filters, schedules)
+- `config/credentials.json` — Google Cloud OAuth client
+- `config/config.yaml` — all runtime settings
 
-Generate Gmail token after adding credentials:
+Generate a Gmail OAuth token:
 
 ```bash
 python scripts/generate_gmail_token.py
 ```
 
-## 3) Initialize DB schema
+### 3. Initialize the database
 
 ```bash
 python scripts/init_db.py
 ```
 
-This creates:
-
-- `emails`
-- `summaries`
-- `system_log`
-
-SQLite runs in WAL mode via connection pragmas in `common/db.py`.
-
-## 4) Build and run all services
+### 4. Build and run
 
 ```bash
 docker compose up --build -d
-```
-
-Check health:
-
-```bash
 docker compose ps
 docker compose logs -f fetcher summarizer telegram-bot
 ```
 
-## 5) Manual trigger from SSH
+### 5. Manual trigger
 
-Run one immediate fetch + summarize + digest cycle:
+Run one immediate fetch → summarize → digest cycle:
 
 ```bash
 ./scripts/manual_cycle.sh
 ```
 
-Equivalent commands:
+For detailed Raspberry Pi deployment instructions (from OS flashing through verification), see [DEPLOY_PI.md](DEPLOY_PI.md).
+
+## Telegram Commands
+
+| Command | Description |
+|---------|-------------|
+| `/digest` | Send undelivered summaries now |
+| `/status` | Show queue stats and last-run metadata |
+| `/search <keyword>` | Search past summaries |
+
+## Testing
+
+Run the test suite (no Docker or external services required):
 
 ```bash
-docker compose up -d
-docker compose exec -T fetcher python /app/fetcher/fetch_now.py
-docker compose exec -T summarizer python /app/summarizer/run_now.py
+pip install -r requirements-test.txt
+python -m pytest tests/ -v
 ```
 
-## 6) Telegram commands
+Lint with [Ruff](https://docs.astral.sh/ruff/):
 
-- `/digest` send undelivered processed summaries now
-- `/status` show queue + last run metadata
-- `/search <keyword>` search past summaries
+```bash
+ruff check .
+```
 
-## Notes
+Both checks run automatically in CI on push and pull requests (see `.github/workflows/tests.yml`).
 
-- Structured JSON logs are emitted by all services for grep-friendly diagnostics.
-- Summarizer uses retry logic for Ollama call failures/timeouts.
-- Service-to-service traffic stays on a private Docker network (`email-internal`); no host ports are published.
+## License
+
+[MIT](LICENSE)
