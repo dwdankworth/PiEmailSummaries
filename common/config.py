@@ -25,12 +25,12 @@ Body:
 {body_text}
 
 Respond with this exact JSON structure:
-{
+{{
   "summary": "2-3 sentence summary of the email content and any action items",
   "priority": <integer 1-5, where 5 is most urgent>,
   "categories": ["list", "of", "relevant", "tags"],
   "priority_reason": "One sentence explaining why you assigned this priority"
-}
+}}
 """
 
 
