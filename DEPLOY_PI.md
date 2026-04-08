@@ -236,12 +236,15 @@ Optional settings you might want to adjust:
 | Setting | Default | What it does |
 |---------|---------|-------------|
 | `fetch_interval_minutes` | `20` | How often to check Gmail (in minutes) |
-| `ollama_model` | `gemma3:1b` | AI model to use — `gemma3:1b` is a good fit for the Pi |
+| `ollama_model` | `gemma4:e2b` | Default Pi 5 8 GB target. If you hit memory pressure, roll back to `gemma3:1b` |
+| `ollama_timeout_seconds` | `300` | Gives the Pi more time to finish slower Gemma 4 summaries |
+| `ollama_num_ctx` | `4096` | Starts with a smaller context window to reduce RAM pressure |
 | `vip_senders` | `[]` | Email addresses that always get high priority. Supports wildcards like `*@company.com` |
 | `priority_keywords` | `["urgent", "deadline", "action required"]` | Words in emails that boost priority |
 | `digest_schedule` | 8am, 1pm, 6pm | Cron expressions for when digests are sent |
 | `skip_labels` | Promotions, Social, Updates | Gmail categories to ignore |
 | `ollama_keep_alive` | `"0"` | How long to keep the AI model in memory after a request. `"0"` frees RAM immediately (best for Pi) |
+| `prompt_body_max_chars` | `4000` | Trims large emails earlier so Gemma 4 stays within a safer Pi memory budget |
 
 Save and exit nano: press `Ctrl+X`, then `Y`, then `Enter`.
 
@@ -286,7 +289,8 @@ docker compose up -d
 1. Docker downloads the base images (Python, Ollama) — this takes a few minutes
    depending on your internet speed.
 2. Docker builds the fetcher and summarizer containers.
-3. Ollama downloads the AI model (`gemma3:1b` is about 1 GB).
+3. Ollama downloads the AI model (`gemma4:e2b` by default on Pi 5 8 GB, with
+   `gemma3:1b` available as the rollback option).
 4. Once the model is ready, the fetcher and summarizer start.
 
 The entire first startup can take **5-10 minutes**. Subsequent starts are much
@@ -423,8 +427,43 @@ docker stats --no-stream
 If Ollama is using too much memory:
 - Make sure `ollama_keep_alive` is `"0"` in your config (frees memory between
   requests).
-- The `gemma3:1b` model is recommended for Pi. Larger models like `mistral:7b`
-  need more RAM and may cause instability.
+- `gemma4:e2b` is the largest model this project recommends by default on a Pi 5
+  8 GB. Do not move up to `gemma4:e4b` or larger models on this hardware.
+- If the Pi still restarts or slows to a crawl, switch `ollama_model` back to
+  `gemma3:1b`, then restart the stack.
+
+### Gemma 4 rollout checklist
+
+When you switch a Pi 5 8 GB system to `gemma4:e2b`, validate it in stages:
+
+1. Check boot and idle memory before loading the model:
+   ```bash
+   free -h
+   docker stats --no-stream
+   ```
+2. Confirm Ollama can pull and load the configured model:
+   ```bash
+   docker compose up -d ollama
+   docker compose exec ollama ollama list
+   ```
+3. Run one summarizer cycle and review latency and success:
+   ```bash
+   docker compose run --rm summarizer python run_now.py
+   docker compose logs --tail 100 summarizer
+   ```
+4. Run a short end-to-end batch and verify Telegram delivery:
+   ```bash
+   ./scripts/manual_cycle.sh
+   docker compose logs --tail 100 fetcher summarizer telegram-bot
+   ```
+5. Keep the system on its normal schedule for at least a day and confirm:
+   - no OOM kills or container restart loops
+   - acceptable single-email latency for your inbox volume
+   - noticeably better summaries than `gemma3:1b`
+
+If any of those checks fail, revert `ollama_model` to `gemma3:1b`. If you made
+custom memory changes for Ollama, restore the previous budget before restarting
+the stack.
 
 ### "Database is locked"
 
@@ -509,7 +548,8 @@ Expected resource usage on a Raspberry Pi 5 (8 GB):
 
 **Disk usage:**
 - Docker images: ~2 GB
-- AI model (`gemma3:1b`): ~1 GB
+- AI model (`gemma4:e2b`): plan for several GB on disk and a higher RAM budget
+  than `gemma3:1b`
 - Database: starts small, grows slowly (a few MB per thousand emails)
 - Total initial footprint: ~3 GB
 

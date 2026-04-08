@@ -54,7 +54,7 @@ class AppConfig:
         default_factory=lambda: ["0 8 * * *", "0 13 * * *", "0 18 * * *"]
     )
     summarizer_interval_minutes: int = 2
-    ollama_model: str = "phi3:mini"
+    ollama_model: str = "gemma4:e2b"
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
     gmail_max_results: int = 25
@@ -63,10 +63,10 @@ class AppConfig:
     gmail_user_email: str = ""
     fetch_interval_minutes: int = 20
     ollama_url: str = "http://ollama:11434/api/generate"
-    ollama_timeout_seconds: int = 180
-    ollama_num_ctx: int = 8192
+    ollama_timeout_seconds: int = 300
+    ollama_num_ctx: int = 4096
     ollama_keep_alive: str = "0"
-    prompt_body_max_chars: int = 6000
+    prompt_body_max_chars: int = 4000
     timezone: str = ""
 
 
