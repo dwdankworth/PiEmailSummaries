@@ -551,7 +551,8 @@ Expected resource usage on a Raspberry Pi 5 (8 GB):
 - AI model (`gemma4:e2b`): plan for several GB on disk and a higher RAM budget
   than `gemma3:1b`
 - Database: starts small, grows slowly (a few MB per thousand emails)
-- Total initial footprint: ~3 GB
+- Total initial footprint: ~6-8 GB, depending on the model layers already
+  cached locally
 
 **Network:**
 - Gmail API calls every 20 minutes (a few KB each)
