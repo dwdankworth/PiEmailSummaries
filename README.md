@@ -16,7 +16,7 @@ A self-hosted AI email pipeline that fetches your Gmail, summarizes each message
 |-----------|------|
 | **Python** | All service code |
 | **Docker Compose** | Orchestration (4 containers on a private network) |
-| **Ollama** | Local LLM inference (e.g. Gemma 3 1B) |
+| **Ollama** | Local LLM inference (e.g. Gemma 3 4B) |
 | **Gmail API** | Read-only OAuth access to your inbox |
 | **SQLite (WAL mode)** | Shared queue and state database |
 | **Telegram Bot API** | Digest delivery and interactive commands |
@@ -53,7 +53,7 @@ tests/             pytest suite (20 unit tests)
 
 ```bash
 docker compose up -d ollama
-docker compose exec ollama ollama pull gemma3:1b
+docker compose exec ollama ollama pull gemma3:4b
 docker compose exec ollama ollama list
 ```
 

@@ -106,7 +106,20 @@ def _build_prompt(config: AppConfig, row: dict[str, Any], matched_keywords: list
         )
     body_text = _sanitize_for_prompt(body_text)
     subject = _sanitize_for_prompt(str(row["subject"]))
+
+    # Build user context string for the prompt header
+    parts: list[str] = []
+    if config.user_name:
+        parts.append(f" You are triaging email for {config.user_name}.")
+    if config.user_pronouns:
+        parts.append(f" Use {config.user_pronouns} pronouns when referring to the recipient.")
+    elif parts:
+        # Name set but no pronouns — default to neutral language
+        parts.append(" Use they/them pronouns or second person (you) when referring to the recipient.")
+    user_context = "".join(parts)
+
     return config.prompt_template.format(
+        user_context=user_context,
         is_vip=bool(row["is_vip"]),
         is_direct=_direct_recipient(headers.get("to", ""), config.gmail_user_email),
         thread_depth=_thread_depth(row["subject"]),

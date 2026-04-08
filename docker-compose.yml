@@ -3,7 +3,7 @@ services:
     image: ollama/ollama:latest
     environment:
       # Must match ollama_model in config/config.yaml.
-      OLLAMA_MODEL: gemma3:1b
+      OLLAMA_MODEL: gemma3:4b
       # Unload model from memory immediately after each request to free RAM/VRAM.
       OLLAMA_KEEP_ALIVE: "0"
     entrypoint: ["/bin/bash", "-c", "ollama serve & for i in $$(seq 1 30); do ollama list >/dev/null 2>&1 && break; sleep 1; done && ollama pull $$OLLAMA_MODEL && wait"]
@@ -23,7 +23,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 4G
+          memory: 5G
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped

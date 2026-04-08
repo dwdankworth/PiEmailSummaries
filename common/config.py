@@ -8,7 +8,21 @@ from zoneinfo import ZoneInfo
 
 import yaml
 
-DEFAULT_PROMPT_TEMPLATE = """You are an email triage assistant. Analyze the following email and respond with ONLY valid JSON, no other text.
+DEFAULT_PROMPT_TEMPLATE = """You are an email triage assistant.{user_context} Analyze the following email and respond with ONLY valid JSON, no other text.
+
+Priority scale (use these definitions — do NOT inflate scores):
+  5 = Requires action within hours (e.g., deadline today, outage, security alert)
+  4 = Requires action within 1-2 days (e.g., approval request, meeting confirmation)
+  3 = Informational but personally relevant (e.g., project update from a colleague)
+  2 = General information, newsletters, news digests, automated notifications
+  1 = Marketing, social media notifications, bulk mail that passed filters
+
+Rules:
+- Base your priority ONLY on the email content and the scale above.
+- Do NOT factor VIP status into your priority score — a VIP boost is applied automatically after your rating.
+- If VIP sender is False below, do NOT mention VIP status in your priority_reason.
+- Do NOT infer VIP status from the sender name or domain. Only the VIP sender field reflects whether this sender is on the user's VIP list.
+- Newsletters, news digests, and automated notifications should be priority 2 or lower unless they contain a personal action item.
 
 Context:
 - VIP sender: {is_vip}
@@ -27,9 +41,9 @@ Body:
 Respond with this exact JSON structure:
 {{
   "summary": "2-3 sentence summary of the email content and any action items",
-  "priority": <integer 1-5, where 5 is most urgent>,
+  "priority": <integer 1-5 using the scale above>,
   "categories": ["list", "of", "relevant", "tags"],
-  "priority_reason": "One sentence explaining why you assigned this priority"
+  "priority_reason": "One sentence explaining why you assigned this priority based on email content"
 }}
 """
 
@@ -68,6 +82,8 @@ class AppConfig:
     ollama_keep_alive: str = "0"
     prompt_body_max_chars: int = 6000
     timezone: str = ""
+    user_name: str = ""
+    user_pronouns: str = ""
 
 
 def _resolve_timezone(raw_value: str | None) -> str:
@@ -167,6 +183,8 @@ def load_config(config_path: str | None = None) -> AppConfig:
             raw_data.get("prompt_body_max_chars", AppConfig().prompt_body_max_chars)
         ),
         timezone=_resolve_timezone(raw_data.get("timezone")),
+        user_name=str(raw_data.get("user_name", "")),
+        user_pronouns=str(raw_data.get("user_pronouns", "")),
     )
     if config.gmail_max_results <= 0 or config.summarizer_batch_size <= 0:
         raise ValueError("gmail_max_results and summarizer_batch_size must be > 0")

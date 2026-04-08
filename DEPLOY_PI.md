@@ -236,12 +236,14 @@ Optional settings you might want to adjust:
 | Setting | Default | What it does |
 |---------|---------|-------------|
 | `fetch_interval_minutes` | `20` | How often to check Gmail (in minutes) |
-| `ollama_model` | `gemma3:1b` | AI model to use — `gemma3:1b` is a good fit for the Pi |
+| `ollama_model` | `gemma3:4b` | AI model to use — `gemma3:4b` offers good accuracy on the Pi |
 | `vip_senders` | `[]` | Email addresses that always get high priority. Supports wildcards like `*@company.com` |
 | `priority_keywords` | `["urgent", "deadline", "action required"]` | Words in emails that boost priority |
 | `digest_schedule` | 8am, 1pm, 6pm | Cron expressions for when digests are sent |
 | `skip_labels` | Promotions, Social, Updates | Gmail categories to ignore |
 | `ollama_keep_alive` | `"0"` | How long to keep the AI model in memory after a request. `"0"` frees RAM immediately (best for Pi) |
+| `user_name` | `""` | Your name — used in the AI prompt so summaries address you correctly |
+| `user_pronouns` | `""` | Your pronouns (e.g. `he/him`, `she/her`, `they/them`) — prevents the AI from guessing |
 
 Save and exit nano: press `Ctrl+X`, then `Y`, then `Enter`.
 
@@ -286,7 +288,7 @@ docker compose up -d
 1. Docker downloads the base images (Python, Ollama) — this takes a few minutes
    depending on your internet speed.
 2. Docker builds the fetcher and summarizer containers.
-3. Ollama downloads the AI model (`gemma3:1b` is about 1 GB).
+3. Ollama downloads the AI model (`gemma3:4b` is about 3 GB).
 4. Once the model is ready, the fetcher and summarizer start.
 
 The entire first startup can take **5-10 minutes**. Subsequent starts are much
@@ -423,7 +425,7 @@ docker stats --no-stream
 If Ollama is using too much memory:
 - Make sure `ollama_keep_alive` is `"0"` in your config (frees memory between
   requests).
-- The `gemma3:1b` model is recommended for Pi. Larger models like `mistral:7b`
+- The `gemma3:4b` model is recommended for Pi. Larger models like `mistral:7b`
   need more RAM and may cause instability.
 
 ### "Database is locked"
@@ -505,13 +507,13 @@ Expected resource usage on a Raspberry Pi 5 (8 GB):
 |-------|-----|-----|-------|
 | Idle (between fetches) | ~2-3 GB | Minimal | Ollama unloads the model when `keep_alive` is `"0"` |
 | Fetching email | ~2-3 GB | Low | Network I/O, minimal processing |
-| Summarizing | ~4-5 GB | High (briefly) | AI model loaded, runs for a few seconds per email |
+| Summarizing | ~5-6 GB | High (briefly) | AI model loaded, runs for a few seconds per email |
 
 **Disk usage:**
 - Docker images: ~2 GB
-- AI model (`gemma3:1b`): ~1 GB
+- AI model (`gemma3:4b`): ~3 GB
 - Database: starts small, grows slowly (a few MB per thousand emails)
-- Total initial footprint: ~3 GB
+- Total initial footprint: ~5 GB
 
 **Network:**
 - Gmail API calls every 20 minutes (a few KB each)

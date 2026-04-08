@@ -74,6 +74,11 @@ class TestNormalizeSummary:
         assert "[filtered]" in prompt
         assert "[...email body truncated for model context window...]" in prompt
         assert "Direct recipient (To/CC): True" in prompt
+        # Verify user context is injected from config
+        assert "TestUser" in prompt
+        assert "he/him" in prompt
+        # Verify VIP constraint guidance is present
+        assert "Do NOT factor VIP status into your priority score" in prompt
 
 
 class TestKeywordMatches:
