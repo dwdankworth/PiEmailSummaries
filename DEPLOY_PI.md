@@ -242,6 +242,8 @@ Optional settings you might want to adjust:
 | `digest_schedule` | 8am, 1pm, 6pm | Cron expressions for when digests are sent |
 | `skip_labels` | Promotions, Social, Updates | Gmail categories to ignore |
 | `ollama_keep_alive` | `"0"` | How long to keep the AI model in memory after a request. `"0"` frees RAM immediately (best for Pi) |
+| `user_name` | `""` | Your name — used in the AI prompt so summaries address you correctly |
+| `user_pronouns` | `""` | Your pronouns (e.g. `he/him`, `she/her`, `they/them`) — prevents the AI from guessing |
 
 Save and exit nano: press `Ctrl+X`, then `Y`, then `Enter`.
 

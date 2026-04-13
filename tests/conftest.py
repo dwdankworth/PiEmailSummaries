@@ -33,6 +33,8 @@ def sample_config():
         telegram_chat_id="12345",
         gmail_user_email="me@gmail.com",
         ollama_model="test-model",
+        user_name="TestUser",
+        user_pronouns="he/him",
     )
 
 
