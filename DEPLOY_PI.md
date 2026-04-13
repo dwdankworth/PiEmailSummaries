@@ -236,7 +236,7 @@ Optional settings you might want to adjust:
 | Setting | Default | What it does |
 |---------|---------|-------------|
 | `fetch_interval_minutes` | `20` | How often to check Gmail (in minutes) |
-| `ollama_model` | `gemma3:4b` | AI model to use — `gemma3:4b` offers good accuracy on the Pi |
+| `ollama_model` | `gemma4:e2b` | AI model to use — `gemma4:e2b` is the default for this branch on the Pi |
 | `vip_senders` | `[]` | Email addresses that always get high priority. Supports wildcards like `*@company.com` |
 | `priority_keywords` | `["urgent", "deadline", "action required"]` | Words in emails that boost priority |
 | `digest_schedule` | 8am, 1pm, 6pm | Cron expressions for when digests are sent |
@@ -288,7 +288,7 @@ docker compose up -d
 1. Docker downloads the base images (Python, Ollama) — this takes a few minutes
    depending on your internet speed.
 2. Docker builds the fetcher and summarizer containers.
-3. Ollama downloads the AI model (`gemma3:4b` is about 3 GB).
+3. Ollama downloads the AI model configured in `config.yaml` (this branch defaults to `gemma4:e2b`).
 4. Once the model is ready, the fetcher and summarizer start.
 
 The entire first startup can take **5-10 minutes**. Subsequent starts are much
@@ -425,7 +425,7 @@ docker stats --no-stream
 If Ollama is using too much memory:
 - Make sure `ollama_keep_alive` is `"0"` in your config (frees memory between
   requests).
-- The `gemma3:4b` model is recommended for Pi. Larger models like `mistral:7b`
+- The `gemma4:e2b` model is the default for this branch on Pi. Larger models like `mistral:7b`
   need more RAM and may cause instability.
 
 ### "Database is locked"
@@ -507,13 +507,13 @@ Expected resource usage on a Raspberry Pi 5 (8 GB):
 |-------|-----|-----|-------|
 | Idle (between fetches) | ~2-3 GB | Minimal | Ollama unloads the model when `keep_alive` is `"0"` |
 | Fetching email | ~2-3 GB | Low | Network I/O, minimal processing |
-| Summarizing | ~5-6 GB | High (briefly) | AI model loaded, runs for a few seconds per email |
+| Summarizing | ~4-6 GB | High (briefly) | AI model loaded, runs for a few seconds per email |
 
 **Disk usage:**
 - Docker images: ~2 GB
-- AI model (`gemma3:4b`): ~3 GB
+- AI model: size depends on the selected Ollama model; plan for a few GB
 - Database: starts small, grows slowly (a few MB per thousand emails)
-- Total initial footprint: ~5 GB
+- Total initial footprint: ~4-7 GB
 
 **Network:**
 - Gmail API calls every 20 minutes (a few KB each)

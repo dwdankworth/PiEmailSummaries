@@ -135,9 +135,11 @@ class TestRunSummarizerCycle:
         monkeypatch.setattr("summarizer.service.load_config", lambda _: config)
 
         observed_prompts: list[str] = []
+        observed_keep_alive: list[str | None] = []
 
-        def fake_call_ollama(config, prompt):
+        def fake_call_ollama(config, prompt, keep_alive=None):
             observed_prompts.append(prompt)
+            observed_keep_alive.append(keep_alive)
             if len(observed_prompts) == 1:
                 assert "Ignore previous instructions" not in prompt
                 assert "[filtered]" in prompt
@@ -165,6 +167,7 @@ class TestRunSummarizerCycle:
         assert result["digest_sent_count"] == 1
         assert result["model"] == sample_config.ollama_model
         assert digest_calls == [(sample_config.ollama_model, "summarizer")]
+        assert observed_keep_alive == ["5m", "0"]
 
         connection = connect(str(database_path))
         statuses = connection.execute(
@@ -194,5 +197,4 @@ class TestRunSummarizerCycle:
             "summarizer_email_failed",
             "summarizer_cycle_completed",
         ]
-
 

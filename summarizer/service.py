@@ -18,6 +18,7 @@ from common.logging_utils import get_logger
 from common.telegram_digest import send_digest_and_mark_delivered
 
 LOGGER = get_logger("summarizer")
+_BATCH_OLLAMA_KEEP_ALIVE = "5m"
 
 
 def validate_ollama_model(config: AppConfig) -> None:
@@ -132,8 +133,25 @@ def _build_prompt(config: AppConfig, row: dict[str, Any], matched_keywords: list
     )
 
 
-def _call_ollama(config: AppConfig, prompt: str) -> dict[str, Any]:
+def _batch_keep_alive(config: AppConfig, batch_size: int, row_index: int) -> str:
+    """Keep the model warm across multi-email batches when keep_alive is set to 0.
+
+    Ollama's keep_alive timer applies per request. With a batch of N separate
+    requests and keep_alive="0", the model may unload after each email. For
+    intermediate emails in a multi-email batch, keep the model warm briefly so
+    the next email can reuse the loaded model, then restore the configured
+    keep_alive on the final request.
+    """
+    if batch_size <= 1 or config.ollama_keep_alive != "0":
+        return config.ollama_keep_alive
+    if row_index == batch_size - 1:
+        return config.ollama_keep_alive
+    return _BATCH_OLLAMA_KEEP_ALIVE
+
+
+def _call_ollama(config: AppConfig, prompt: str, keep_alive: str | None = None) -> dict[str, Any]:
     last_error: Exception | None = None
+    effective_keep_alive = keep_alive if keep_alive is not None else config.ollama_keep_alive
     for attempt in range(1, 4):
         try:
             response = httpx.post(
@@ -143,7 +161,7 @@ def _call_ollama(config: AppConfig, prompt: str) -> dict[str, Any]:
                     "prompt": prompt,
                     "stream": False,
                     "format": "json",
-                    "keep_alive": config.ollama_keep_alive,
+                    "keep_alive": effective_keep_alive,
                     "options": {"num_ctx": config.ollama_num_ctx},
                 },
                 timeout=float(config.ollama_timeout_seconds),
@@ -208,7 +226,7 @@ def run_summarizer_cycle(
     digest_sent = 0
     try:
         pending_rows = fetch_pending_emails(connection, config.summarizer_batch_size)
-        for row in pending_rows:
+        for row_index, row in enumerate(pending_rows):
             row_dict = dict(row)
             cycle_started = time.perf_counter()
             try:
@@ -216,7 +234,11 @@ def run_summarizer_cycle(
                     row_dict["subject"], row_dict["body_text"], config.priority_keywords
                 )
                 prompt = _build_prompt(config, row_dict, matched_keywords)
-                model_output = _call_ollama(config, prompt)
+                model_output = _call_ollama(
+                    config,
+                    prompt,
+                    keep_alive=_batch_keep_alive(config, len(pending_rows), row_index),
+                )
                 normalized = _normalize_summary(
                     model_output, matched_keywords, bool(row_dict["is_vip"])
                 )

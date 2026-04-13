@@ -3,7 +3,7 @@ services:
     image: ollama/ollama:latest
     environment:
       # Must match ollama_model in config/config.yaml.
-      OLLAMA_MODEL: gemma3:4b
+      OLLAMA_MODEL: gemma4:e2b
       # Unload model from memory immediately after each request to free RAM/VRAM.
       OLLAMA_KEEP_ALIVE: "0"
     entrypoint: ["/bin/bash", "-c", "ollama serve & for i in $$(seq 1 30); do ollama list >/dev/null 2>&1 && break; sleep 1; done && ollama pull $$OLLAMA_MODEL && wait"]
@@ -47,7 +47,7 @@ services:
       - ./config/token.json:/secrets/token.json
       - ./config/credentials.json:/secrets/credentials.json:ro
     healthcheck:
-      test: ["CMD-SHELL", "pgrep -f 'python.*main.py' > /dev/null"]
+      test: ["CMD-SHELL", "python -c \"from pathlib import Path; import sys; sys.exit(0 if b'/app/fetcher/main.py' in Path('/proc/1/cmdline').read_bytes() else 1)\""]
       interval: 60s
       timeout: 10s
       retries: 3
@@ -80,7 +80,7 @@ services:
       - email-data:/data
       - ./config/config.yaml:/config/config.yaml:ro
     healthcheck:
-      test: ["CMD-SHELL", "pgrep -f 'python.*main.py' > /dev/null"]
+      test: ["CMD-SHELL", "python -c \"from pathlib import Path; import sys; sys.exit(0 if b'/app/summarizer/main.py' in Path('/proc/1/cmdline').read_bytes() else 1)\""]
       interval: 60s
       timeout: 10s
       retries: 3
